@@ -1,0 +1,312 @@
+<template>
+
+<!--
+  refresh_item_category(null)
+  |
+  v
+  refresh_item_category(prc_pk_parent)
+  |
+  v
+  refresh_item_product(prc_pk)
+-->
+    
+
+  <el-carousel :interval="0" type="card" height="700px" :initial-index="initial_index" arrow="always">
+
+    <div>
+      <v-btn
+        type="button"
+        rounded
+        class="my-1 primary ml-3 d-flex justify-content-center"
+        @click="return_to_parent()"
+      >
+        {{ $t('buttons.back_catalog') }}
+      </v-btn>
+    </div>
+
+   <!-- <div> 
+
+      <div v-if="!isDisplay">
+        <v-btn
+          type="button"
+          rounded
+          class="my-1 primary ml-3 d-flex justify-content-center"
+          @click="isDisplay"
+        >
+          {{ $t('buttons.back_catalog') }}
+        </v-btn>
+      </div>
+
+      <div v-if="isDisplay">
+        <v-btn
+          type="button"
+          rounded
+          class="my-1 primary ml-3 d-flex justify-content-center"
+          @click="return_to_parent()"
+        >
+          {{ $t('buttons.back_catalog') }}
+        </v-btn>
+      </div>
+
+    </div> -->
+
+    <el-carousel-item v-for="item in items" :key="item.key">
+
+      <div v-if="!item.pro_pk_plan">
+         <v-card-title class="item__title text-center">
+           {{item.prc_code}}
+         </v-card-title>
+         <v-card-text class="mt-5 d-inline-block mx-auto text-center">
+           <v-btn v-if="item.prc_sub_count>0" @click="refresh_item_category(item.prc_pk)" :disabled="!item.prc_active">{{ $t('buttons.category_catalog') }}</v-btn>
+           <v-btn v-else @click="refresh_item_product(item.prc_pk)" :disabled="!item.prc_active">{{ $t('buttons.plans_catalog') }}</v-btn>
+         </v-card-text>
+         <v-card-text class="item__content">
+           {{item.prc_name}}
+         </v-card-text>
+      </div>
+
+      <div v-if="item.pro_pk_plan">
+          <v-card-title class="item__title text-center">
+            {{item.pro_name_plan}}
+          </v-card-title>
+          <v-card-text class="my-auto d-inline-block mx-auto text-center">
+            <div class="mt-3">
+              <h2 class="font-weight-bold">
+                <span>{{ $n(item.pro_price_plan,'currency') }}</span>
+              </h2>
+            </div>
+            <div class="mt-4 mx-auto">
+              <img :src="item.pro_image_link_plan" class="my-1" style="width:200px; height: 200px">
+            </div>
+            <div class="mt-3 d-inline-block mx-auto">
+              <v-btn @click="order_product(item.pro_pk)" :disabled="!item.prc_active">{{ $t('buttons.order_catalog') }}</v-btn>
+            </div>
+          </v-card-text>
+          <v-card-text class="item__content" v-html="item.pro_html_content_product">
+            {{item.pro_html_content_product}}
+          </v-card-text>
+      </div>
+
+    </el-carousel-item>
+
+  </el-carousel>
+
+</template>
+
+<script>
+
+import Vue from 'vue';
+import i18n from '@/plugins/i18n.js';
+import ElementUI from 'element-ui';
+import 'element-ui/lib/theme-chalk/index.css';
+import BasicComponent from '@/views/BasicComponent.vue';
+
+export default {
+
+   name: 'catalog',
+   mixins: [BasicComponent],
+   components: {
+      Vue,
+      i18n,
+      ElementUI,
+   },
+
+
+
+   data: () => {
+
+      return {
+         items: [],
+         initial_index: 0,
+         last_parent: null,
+         subCategory: false,
+         isDisplay: false,
+      }
+   },
+
+   async mounted () {
+      await this.refresh_item_category();
+   },
+
+  methods: {
+
+   async return_to_parent() {
+      console.log('return_to_parent, last_parent='+this.last_parent);
+      await this.refresh_item_category(this.last_parent);
+   },
+
+    async refresh_item_category(key=null) {
+       
+       if ( key!=null ) {
+        this.last_parent = this.items[key].prc_pk_parent;
+        console.log('refresh_item_category0, last_parent='+this.last_parent);
+       } else {
+        this.last_parent = null;
+       }
+
+      /*  if ( key!=null ) {
+        this.last_parent = this.items[key].prc_pk;
+       } else {
+        this.last_parent = null;
+       } */
+
+     /*   if ( key!=null ) {
+          this.last_parent = this.items[key].prc_pk;
+        } else if ( key!=null ) {
+          this.last_parent = this.items[key].prc_pk_parent;
+        } else {
+          this.last_parent = null;
+        }*/
+  
+        if ( key==null ) {
+          var { errorinfos, api_response } = await this.$api.getRows(this.$router,'productcategory?search={"prc_level": 1,"prc_visible_on_front": true }');
+        } else {
+          var { errorinfos, api_response } = await this.$api.getRows(this.$router,'productcategory?search={"prc_pk_parent": '+key+',"prc_visible_on_front": true }');
+        }
+        console.log('refresh_item_category, api_response='+JSON.stringify(api_response));
+        this.items = api_response.rows;
+
+        for (let i = 0; i < this.items.length; i++) {
+           if (this.items[i].prc_default == true){
+             this.initial_index = i;
+             console.log('refresh_item_category, prc_default1')
+             break;
+           } else {
+              for (let j = 0; j < this.items[i].length; j++) {
+                if (this.items[i][j].prc_default == true){
+                  this.initial_index = j;
+                  console.log('refresh_item_category, prc_active1')
+                  break;
+                }
+              }
+           }
+        } 
+
+        console.log('refresh_item_category, last_parent='+this.last_parent);
+   },
+
+    async refresh_item_product(key) {
+      
+        let { errorinfos, api_response } = await this.$api.getRows(this.$router,'productcategory/'+key+'/plans');
+        console.log('refresh_item_product, api_response='+JSON.stringify(api_response));
+        this.items = api_response.rows;
+
+        for (let i = 0; i < this.items.length; i++) {
+           if (this.items[i].pro_default_plan == true){
+             this.initial_index = i;
+             console.log('refresh_item_product, prc_default_plan1')
+             break;
+           }
+        }
+    },
+
+    async order_product(key) {
+        let { errorinfos, api_response } = await this.$api.getRows(this.$router,'product/'+key+'/plans');
+        console.log('order_product, api_response='+JSON.stringify(api_response));
+        this.items = api_response.rows;
+
+    }
+  }
+}
+
+</script>
+
+<style>
+
+.item {
+  position: relative;
+  height: 100%;
+}
+
+.item__title{
+  padding-top: 2rem;
+  display: flex;
+  justify-content: center;
+  font-size: 35px;
+  border-style: solid;
+  padding: 25px;
+}
+
+.item__content {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  padding-bottom: 10px;
+  padding-top: 10px;
+  padding-left: 30px;
+  font-size: 25px;
+  line-height: 1.5em;
+}
+
+.el-carousel__arrow {
+  border: none;
+  outline: 0;
+  padding: 0;
+  margin: 0;
+ /* height: 36px;*/
+ /* width: 36px; */
+  cursor: pointer;
+  -webkit-transition: .3s;
+  transition: .3s;
+  border-radius: 50%;
+  background-color: #6f42c1;
+  color: #FFF;
+  position: absolute;
+  top: 50%;
+  z-index: 10;
+  -webkit-transform: translateY(-50%);
+  transform: translateY(-50%);
+  text-align: center;
+  font-size: 30px;
+}
+
+.el-carousel__arrow--right {
+  right: 2em;
+  height: 60px;
+  width:60px;
+}
+
+
+.el-icon-arrow-left {
+  font-weight: 1000;
+}
+
+.el-icon-arrow-right {
+  font-weight: 1000;
+}
+
+.el-carousel__arrow--left {
+  left: 4em;
+  height: 60px;
+  width: 60px;
+}
+
+.el-carousel__item--card.is-active {
+  z-index: 2;
+  width: 240px;
+}
+
+.el-carousel__item--card {
+  z-index: 1;
+  width: 240px;
+}
+
+.el-carousel__item:nth-child(2n) {
+  /* transform: translateX(100px) scale(0.83); */
+  background-color: #a6b2c2;
+  height: 100%;
+}
+
+.el-carousel__item:nth-child(2n + 1) {
+  /* transform: translateX(500px) scale(1); */
+  background-color: #d3dce6;
+  height: 100%;
+}
+
+</style>
+
